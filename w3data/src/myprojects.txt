@@ -1,0 +1,828 @@
+
+import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import Plot from 'react-plotly.js';
+import '../styles/MeasurementProjectsDetails.css';
+import { fetchData, fetchUserProjects, fetchMeasurementNames } from './measurmnets-global';
+import MetadataDownload from './filtereddata';
+
+
+const MeasurementProjectsDetails = () => {
+  const { username } = useParams();
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showTable, setShowTable] = useState(false);
+  const [userProjects, setUserProjects] = useState([]);  
+  const [fieldNames, setFieldNames] = useState([]);
+  const [measurementNames, setMeasurementNames] = useState([]);
+  const [selectedMeasurement, setSelectedMeasurement] = useState('');
+  const [selectedFields, setSelectedFields] = useState([]);
+  const [selectedProject, setSelectedProject] = useState('');
+  const [metadata, setMetadata] = useState([]); // New state for metadata
+  const [selectedVersion, setSelectedVersion] = useState(''); // Initialize with an empty string
+  const [uniqueVersions, setUniqueVersions] = useState([]);
+
+
+
+  useEffect(() => {
+    fetchData(username, selectedMeasurement, selectedProject, setData, setFieldNames, setLoading);
+  }, [username, selectedMeasurement, selectedProject]);
+
+  useEffect(() => {
+    fetchUserProjects(username, setUserProjects, setMetadata, setUniqueVersions);
+  }, [username]);
+
+  useEffect(() => {
+    fetchMeasurementNames(setMeasurementNames);
+  }, []);
+  const toggleView = () => {
+    setShowTable(!showTable);
+  };
+
+
+
+
+  const handleMeasurementSelection = (event) => {
+    const selectedMeasurement = event.target.value;
+    setSelectedMeasurement(selectedMeasurement);
+  };
+
+  const handleProjectSelection = (event) => {
+    const selectedProject = event.target.value;
+    setSelectedProject(selectedProject);
+  };
+
+  const handleVersionSelection = (event) => {
+    const version = event.target.value;
+    setSelectedVersion(version);
+  
+  };
+  const toggleFieldSelection = (field) => {
+    setSelectedFields((prevSelectedFields) =>
+      prevSelectedFields.includes(field)
+        ? prevSelectedFields.filter((f) => f !== field)
+        : [...prevSelectedFields, field]
+    );
+  };
+
+
+
+
+
+
+
+
+
+
+
+  //Metadata fucntion  
+  const renderMetadata = () => {
+
+    // Ensure that there is metadata and a version is selected
+    if (!metadata || metadata.length === 0 || !selectedVersion) {
+      return <p>No metadata available.</p>;
+    }
+  
+    // Filter metadata based on the selected version
+    const filteredMetadata = metadata.filter((meta) => String(meta.version) === selectedVersion);
+    console.log('Filtered Metadata:', filteredMetadata);
+  
+    if (filteredMetadata.length === 0) {
+      return <p>No metadata available for the selected version.</p>;
+    }
+  
+    // Render the metadata for the selected version
+    return (
+      <div>
+        <h2>Metadata for Version: {selectedVersion}</h2>
+        {filteredMetadata.length > 0 && (
+        <MetadataDownload filteredMetadata={filteredMetadata} selectedVersion={selectedVersion} />
+      )}
+  
+        {filteredMetadata.map((meta, index) => (
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '20px' }} key={index}>
+            {Object.entries(meta).map(([key, value]) => (
+              // Check if the value is not empty before rendering
+              value !== undefined && value !== "" && (
+                <div key={key} style={{ width: '50%' }}>
+                  <p><strong>{key.replace(/_/g, ' ').toUpperCase()}:</strong></p>
+                  <p>{value}</p>
+                </div>
+              )
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  
+    
+    
+
+
+//Table view for influcdb data coming in//////
+
+  const renderTable = () => {
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return <p>No data available.</p>;
+    }
+
+    return (
+      <div style={{width:'100%',overflow:'auto',height:'500px',marginBottom:'20px'}}>
+         <button className='toggel_button' onClick={toggleView}>
+        {showTable ? 'Show Graphs' : 'Show Table'}
+      </button>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              {fieldNames.map((fieldName) => (
+                <th key={fieldName}>{fieldName}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, index) => (
+              <tr key={index}>
+                <td>{item.Time}</td>
+                {fieldNames.map((fieldName) => (
+                  <td key={fieldName}>{item.Value}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+
+
+  //chart view for influxdb data coming in//
+  const renderChart = () => {
+    if (!data || !Array.isArray(data) || data.length === 0 || selectedFields.length === 0) {
+      return <p>No data available.</p>;
+    }
+    const filteredData = data.filter((item) => selectedFields.includes(item.Field));
+    const traceData = selectedFields.map((field) => {
+      const fieldData = filteredData.filter((item) => item.Field === field);
+      const xData = fieldData.map((item) => item.Time);
+      const yData = fieldData.map((item) => item.Value);
+      return {
+        x: xData,
+        y: yData,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: field,
+      };
+    });
+    const layout = {
+      plot_bgcolor: '#27293d',
+      paper_bgcolor: '#27293d',
+      innerHeight:600,
+      xaxis: {
+        gridcolor:'rgba(51, 88, 244, 0.3)',
+        gridwidth: 0.2,
+        title: {
+          text: 'Time',
+          font: {
+            color: '#9a9a9a', // Set x-axis title color to red
+          },
+        },
+        type: 'date',
+    
+        tickfont: {
+          color: '#9a9a9a', // Set x-axis tick color to orange
+        },
+      },
+      yaxis: {
+        showgrid: false,
+        title: {
+          text: 'Values',
+          font: {
+            color: '#9a9a9a', // Set x-axis title color to red
+          },
+         },
+         tickfont: {
+          color: '#9a9a9a', // Set x-axis tick color to orange
+        },
+      },     
+    };
+
+    return (
+    <div style={{ }}>
+       <button className='toggel_button' onClick={toggleView}>
+        {showTable ? 'Show Graphs' : 'Show Table'}
+      </button>     
+    <Plot  style={{width: '100%'}} data={traceData} layout={layout} />
+    </div>
+ )};
+
+
+
+
+
+
+
+
+
+
+  return (
+<div className="MeasurementProjectsDetails-container"> 
+<div className='project_selection'>
+<div style={{width:'40%',height:'auto'}} >
+<h2>Select a Project</h2>
+<div>
+  <select onChange={handleProjectSelection}>
+    <option value="">Select a project</option>
+    {userProjects.map((project, index) => (
+      <option key={index} value={project.project_name}>
+        {project.project_name}
+      </option>
+    ))}
+  </select>
+</div>
+
+{selectedProject && (
+  <div>
+    <div className='project_description_section'>
+    <h3>Project Description</h3>
+    <p>{userProjects.find((project) => project.project_name === selectedProject)?.project_description}</p>
+    </div>
+    <div>
+  <h2>Meta Data For The Project</h2>
+  <select onChange={handleVersionSelection}>
+    <option value="">Select a version</option>
+    {/* Render options based on unique versions */}
+    {uniqueVersions.map((version, index) => (
+      <option key={index} value={version}>
+        {version}
+      </option>
+      
+    ))}
+  </select>  
+</div>
+  </div>
+)}
+     </div>
+     <div style={{width:'40%',height:'auto'}} >
+     <div>
+        <h2>Measurement Names</h2>
+        <select onChange={handleMeasurementSelection}>
+          <option value="">Select a measurement</option>
+          {measurementNames.map((measurement, index) => (
+            <option key={index} value={measurement}>
+              {measurement}
+            </option>
+          ))}
+        </select>
+      </div>         
+      <div style={{marginTop:'20px'}}>
+        {fieldNames.map((fieldName) => (
+         <label key={fieldName}>
+            <input
+              type="checkbox"
+              value={fieldName}
+              checked={selectedFields.includes(fieldName)}
+              onChange={() => toggleFieldSelection(fieldName)}
+            />
+            {fieldName}
+          </label>
+        ))}
+      </div>      
+     </div>
+      {/* Display metadata information */}  
+    </div>      
+    <div className='metadata_section'>
+    <h2>Meta Data For The Project </h2>
+    {renderMetadata()}
+    </div>   
+    <div className='chart_section'>
+    {loading ? (
+        <p>Loading data...</p>
+      ) : showTable ? (
+        <div>
+          
+          <h2>Table View</h2>
+          {renderTable()}
+        </div>
+      ) : (
+        <div style={{width:'100%'}}>
+          
+          <h2>Chart View</h2>
+        {renderChart()}
+        </div>
+      )}
+    </div>
+    </div>    
+  );
+};
+
+export default MeasurementProjectsDetails;
+
+  import axios from 'axios';
+import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import Plot from 'react-plotly.js';
+import '../styles/MeasurementProjectsDetails.css';
+
+
+const MeasurementProjectsDetails = () => {
+  const { username } = useParams();
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showTable, setShowTable] = useState(false);
+  const [userProjects, setUserProjects] = useState([]);  
+  const [fieldNames, setFieldNames] = useState([]);
+  const [measurementNames, setMeasurementNames] = useState([]);
+  const [selectedMeasurement, setSelectedMeasurement] = useState('');
+  const [selectedFields, setSelectedFields] = useState([]);
+  const [selectedProject, setSelectedProject] = useState('');
+  const [metadata, setMetadata] = useState([]); // New state for metadata
+  const [selectedVersion, setSelectedVersion] = useState(''); // Initialize with an empty string
+  const [uniqueVersions, setUniqueVersions] = useState([]);
+  const [filteredMetadata, setFilteredMetadata] = useState([]);
+
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await axios.get(`http://localhost:5000/influxdb-data/${username}`, {
+          params: { measurement: selectedMeasurement, project: selectedProject },
+        });
+        setData(response.data.data_list);
+        setFieldNames(response.data.field_names);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [username, selectedMeasurement, selectedProject]);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const projectResponse = await axios.get(`http://localhost:5000/user-projects/${username}`);
+        setUserProjects(projectResponse.data.projects);
+        
+
+        // Set metadata in the state
+        setMetadata(projectResponse.data.metadata);
+
+        // Extract unique versions from metadata and set them in state
+        const versions = projectResponse.data.metadata.map((meta) => meta.version);
+        const uniqueVersions = [...new Set(versions)];
+        setUniqueVersions(uniqueVersions);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    };
+
+    fetchProjects();
+  }, [username]);
+
+  useEffect(() => {
+    const fetchMeasurementNames = async () => {
+      try {
+        const measurementsResponse = await axios.get('http://localhost:5000/measurements');
+        setMeasurementNames(measurementsResponse.data);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    };
+
+    fetchMeasurementNames();
+  }, []);
+
+  const toggleView = () => {
+    setShowTable(!showTable);
+  };
+
+
+
+
+  const handleMeasurementSelection = (event) => {
+    const selectedMeasurement = event.target.value;
+    setSelectedMeasurement(selectedMeasurement);
+  };
+
+  const handleProjectSelection = (event) => {
+    const selectedProject = event.target.value;
+    setSelectedProject(selectedProject);
+  };
+
+  const handleVersionSelection = (event) => {
+    const version = event.target.value;
+    setSelectedVersion(version);
+    const filteredMetadata = metadata.filter(item => item.version === selectedVersion);
+    setFilteredMetadata(filteredMetadata);
+  };
+  const toggleFieldSelection = (field) => {
+    setSelectedFields((prevSelectedFields) =>
+      prevSelectedFields.includes(field)
+        ? prevSelectedFields.filter((f) => f !== field)
+        : [...prevSelectedFields, field]
+    );
+  };
+  const downloadMetadataCSV = () => {
+    const formattedContent = filteredMetadata.map(item => {
+      return Object.entries(item)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('\n');
+    }).join('\n');
+    const blob = new Blob([formattedContent], { type: 'text/plain;charset=utf-8;' });
+    const link = document.createElement('a');  
+    if (navigator.msSaveBlob) {
+      navigator.msSaveBlob(blob, `metadata_${selectedVersion}.txt`);
+    } else {
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = `metadata_${selectedVersion}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+
+
+
+
+
+
+
+  //Metadata fucntion  
+  const renderMetadata = () => {
+    // Ensure that there is metadata and a version is selected
+    if (!metadata || metadata.length === 0 || !selectedVersion) {
+      return <p>No metadata available.</p>;
+    }
+  
+    // Filter metadata based on the selected version
+    const filteredMetadata = metadata.filter((meta) => String(meta.version) === selectedVersion);
+    console.log('Filtered Metadata:', filteredMetadata);
+  
+    if (filteredMetadata.length === 0) {
+      return <p>No metadata available for the selected version.</p>;
+    }
+  
+    // Render the metadata for the selected version
+    return (
+      <div>
+        <h2>Metadata for Version: {selectedVersion}</h2>
+        <button className='metadata_download' onClick={downloadMetadataCSV}>Download Metadata CSV</button>
+  
+        {filteredMetadata.map((meta, index) => (
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '20px' }} key={index}>
+            {Object.entries(meta).map(([key, value]) => (
+              // Check if the value is not empty before rendering
+              value !== undefined && value !== "" && (
+                <div key={key} style={{ width: '50%' }}>
+                  <p><strong>{key.replace(/_/g, ' ').toUpperCase()}:</strong></p>
+                  <p>{value}</p>
+                </div>
+              )
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  
+    
+    
+
+
+//Table view for influcdb data coming in//////
+
+  const renderTable = () => {
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return <p>No data available.</p>;
+    }
+
+    return (
+      <div style={{width:'100%',overflow:'auto',height:'500px',marginBottom:'20px'}}>
+         <button className='toggel_button' onClick={toggleView}>
+        {showTable ? 'Show Graphs' : 'Show Table'}
+      </button>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              {fieldNames.map((fieldName) => (
+                <th key={fieldName}>{fieldName}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, index) => (
+              <tr key={index}>
+                <td>{item.Time}</td>
+                {fieldNames.map((fieldName) => (
+                  <td key={fieldName}>{item.Value}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+
+
+  //chart view for influxdb data coming in//
+  const renderChart = () => {
+    if (!data || !Array.isArray(data) || data.length === 0 || selectedFields.length === 0) {
+      return <p>No data available.</p>;
+    }
+    const filteredData = data.filter((item) => selectedFields.includes(item.Field));
+    const traceData = selectedFields.map((field) => {
+      const fieldData = filteredData.filter((item) => item.Field === field);
+      const xData = fieldData.map((item) => item.Time);
+      const yData = fieldData.map((item) => item.Value);
+      return {
+        x: xData,
+        y: yData,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: field,
+      };
+    });
+    const layout = {
+      plot_bgcolor: '#27293d',
+      paper_bgcolor: '#27293d',
+      innerHeight:600,
+      xaxis: {
+        gridcolor:'rgba(51, 88, 244, 0.3)',
+        gridwidth: 0.2,
+        title: {
+          text: 'Time',
+          font: {
+            color: '#9a9a9a', // Set x-axis title color to red
+          },
+        },
+        type: 'date',
+    
+        tickfont: {
+          color: '#9a9a9a', // Set x-axis tick color to orange
+        },
+      },
+      yaxis: {
+        showgrid: false,
+        title: {
+          text: 'Values',
+          font: {
+            color: '#9a9a9a', // Set x-axis title color to red
+          },
+         },
+         tickfont: {
+          color: '#9a9a9a', // Set x-axis tick color to orange
+        },
+      },     
+    };
+
+    return (
+    <div style={{ }}>
+       <button className='toggel_button' onClick={toggleView}>
+        {showTable ? 'Show Graphs' : 'Show Table'}
+      </button>     
+    <Plot  style={{width: '100%'}} data={traceData} layout={layout} />
+    </div>
+ )};
+
+
+
+
+
+
+
+
+
+
+  return (
+<div className="MeasurementProjectsDetails-container"> 
+<div className='project_selection'>
+<div style={{width:'40%',height:'auto'}} >
+<h2>Select a Project</h2>
+<div>
+  <select onChange={handleProjectSelection}>
+    <option value="">Select a project</option>
+    {userProjects.map((project, index) => (
+      <option key={index} value={project.project_name}>
+        {project.project_name}
+      </option>
+    ))}
+  </select>
+</div>
+
+{selectedProject && (
+  <div>
+    <div className='project_description_section'>
+    <h3>Project Description</h3>
+    <p>{userProjects.find((project) => project.project_name === selectedProject)?.project_description}</p>
+    </div>
+    <div>
+  <h2>Meta Data For The Project</h2>
+  <select onChange={handleVersionSelection}>
+    <option value="">Select a version</option>
+    {/* Render options based on unique versions */}
+    {uniqueVersions.map((version, index) => (
+      <option key={index} value={version}>
+        {version}
+      </option>
+      
+    ))}
+  </select>  
+</div>
+  </div>
+)}
+     </div>
+     <div style={{width:'40%',height:'auto'}} >
+     <div>
+        <h2>Measurement Names</h2>
+        <select onChange={handleMeasurementSelection}>
+          <option value="">Select a measurement</option>
+          {measurementNames.map((measurement, index) => (
+            <option key={index} value={measurement}>
+              {measurement}
+            </option>
+          ))}
+        </select>
+      </div>         
+      <div style={{marginTop:'20px'}}>
+        {fieldNames.map((fieldName) => (
+         <label key={fieldName}>
+            <input
+              type="checkbox"
+              value={fieldName}
+              checked={selectedFields.includes(fieldName)}
+              onChange={() => toggleFieldSelection(fieldName)}
+            />
+            {fieldName}
+          </label>
+        ))}
+      </div>      
+     </div>
+      {/* Display metadata information */}  
+    </div>      
+    <div className='metadata_section'>
+    <h2>Meta Data For The Project </h2>
+    {renderMetadata()}
+    </div>   
+    <div className='chart_section'>
+    {loading ? (
+        <p>Loading data...</p>
+      ) : showTable ? (
+        <div>
+          
+          <h2>Table View</h2>
+          {renderTable()}
+        </div>
+      ) : (
+        <div style={{width:'100%'}}>
+          
+          <h2>Chart View</h2>
+        {renderChart()}
+        </div>
+      )}
+    </div>
+    </div>    
+  );
+};
+
+export default MeasurementProjectsDetails;
+
+
+
+
+////////////////////////////////////////////////////////////////
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Welcome from './components/Welcome';
+import UplaodForm from './components/UploadForm';
+import Experimental from './components/experimnets';
+import Login from './components/Login';
+import HelpComponent from './components/Help';
+
+import Search from './components/Search';
+import AdminLogin from './admin/components/AdminLogin';
+import Home from './components/home';
+import MyProfile from './components/MyProfile';
+import MeasurementProjectsDetails from './components/MeasurementProjectsDetails';
+import TopNavBar from './components/TopNavBar';
+import SideNavBar from './components/SideNavBar';
+import Footer from './components/Footer';
+import '../src/styles/App.css';
+
+
+const App = () => {
+  return (
+    <Router>
+      <div className="app-container">
+        <Routes>
+          <Route path="/" element={<Welcome />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/myprofile/:username" element={<MyProfile />} />
+
+          <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/user" element={<Login userType="user" />} />
+          <Route
+            path="/home/:username"
+            element={
+              <React.Fragment>
+                <TopNavBar />
+                <div className="content-container">
+                  <SideNavBar />
+                  <Home />
+                </div>
+              </React.Fragment>
+            }
+          />
+          <Route
+            path="/measurement-projects-details/:username"
+            element={
+              <React.Fragment>
+                <TopNavBar />
+                <div className="content-container">
+                  <SideNavBar />
+                  <MeasurementProjectsDetails />
+                </div>
+              </React.Fragment>
+            }
+          />
+
+
+<Route
+            path="/Search/:username"
+            element={
+              <React.Fragment>
+                <TopNavBar />
+                <div className="content-container">
+                  <SideNavBar />
+                  <Search/>
+                </div>
+              </React.Fragment>
+            }
+          />
+          
+
+<Route
+            path="/HelpComponent/:username"
+            element={
+              <React.Fragment>
+                <TopNavBar />
+                <div className="content-container">
+                  <SideNavBar />
+                  <HelpComponent/>
+                </div>
+              </React.Fragment>
+            }
+          />
+          
+<Route
+            path="/Experimental/:username"
+            element={
+              <React.Fragment>
+                <TopNavBar />
+                <div className="content-container">
+                 
+                  <Experimental/>
+                </div>
+              </React.Fragment>
+            }
+          />
+       
+<Route
+            path="/UploadForm/:username"
+            element={
+              <React.Fragment>
+                <TopNavBar />
+                <div className="content-container">
+                  <SideNavBar />
+                  <UplaodForm/>
+                </div>
+              </React.Fragment>
+            }
+          />
+
+
+          <Route
+            path="/*"
+            element={<Navigate to="/" replace />}
+          />
+        </Routes>
+        <Footer />
+      </div>
+
+    </Router>
+  );
+};
+
+export default App;
